@@ -115,7 +115,7 @@ export function handleElement(element: Element, context: Readonly<TraversalConte
 			svgContainer.setAttribute('opacity', styles.opacity)
 		}
 
-		if (styles.transform && styles.transform !== 'none') {		
+		if (styles.transform && styles.transform !== 'none') {
 			svgContainer.setAttribute('transform', styles.transform)
 		}
 
@@ -263,7 +263,7 @@ function addBackgroundAndBorders(
 	backgroundAndBordersContainer: SVGElement,
 	window: Window,
 	context: Pick<TraversalContext, 'getUniqueId' | 'svgDocument'>,
-    parentElement: HTMLElement | null
+	parentElement: HTMLElement | null
 ): void {
 	if (isVisible(styles)) {
 		if (
@@ -384,20 +384,29 @@ function createBox(bounds: DOMRectReadOnly, context: Pick<TraversalContext, 'svg
 }
 
 // Alpha blending from https://stackoverflow.com/a/2645218/9271476
-function convertRGBAtoRGB(rgba: string, parent_color: string):string {
-    if (rgba.startsWith('rgba(')) {
-        const rgba_values = rgba.slice(5, -1).split(',')
-		const parent_is_rgba = (parent_color.startsWith('rgba'))
-		const parent_rgb_values = parent_color.slice((parent_is_rgba ? 5 : 4), -1).split(',')
-        const rgb_r = (((1 - parseFloat(rgba_values[3]||'')) * parseFloat(parent_rgb_values[0]||'')) + (parseFloat(rgba_values[3]||'') * parseFloat(rgba_values[0]||''))).toFixed()
-        const rgb_g = (((1 - parseFloat(rgba_values[3]||'')) * parseFloat(parent_rgb_values[1]||'')) + (parseFloat(rgba_values[3]||'') * parseFloat(rgba_values[1]||''))).toFixed()
-        const rgb_b = (((1 - parseFloat(rgba_values[3]||'')) * parseFloat(parent_rgb_values[2]||'')) + (parseFloat(rgba_values[3]||'') * parseFloat(rgba_values[2]||''))).toFixed()
-        return 'rgb(' + rgb_r + ',' + rgb_g + ',' + rgb_b  +')'
-    }
-    return rgba;
+function convertRGBAtoRGB(rgba: string, parent_color: string): string {
+	if (rgba.startsWith('rgba(')) {
+		const rgba_values = rgba.slice(5, -1).split(',')
+		const parent_is_rgba = parent_color.startsWith('rgba')
+		const parent_rgb_values = parent_color.slice(parent_is_rgba ? 5 : 4, -1).split(',')
+		const rgb_r = (
+			(1 - parseFloat(rgba_values[3] || '')) * parseFloat(parent_rgb_values[0] || '') +
+			parseFloat(rgba_values[3] || '') * parseFloat(rgba_values[0] || '')
+		).toFixed()
+		const rgb_g = (
+			(1 - parseFloat(rgba_values[3] || '')) * parseFloat(parent_rgb_values[1] || '') +
+			parseFloat(rgba_values[3] || '') * parseFloat(rgba_values[1] || '')
+		).toFixed()
+		const rgb_b = (
+			(1 - parseFloat(rgba_values[3] || '')) * parseFloat(parent_rgb_values[2] || '') +
+			parseFloat(rgba_values[3] || '') * parseFloat(rgba_values[2] || '')
+		).toFixed()
+		return 'rgb(' + rgb_r + ',' + rgb_g + ',' + rgb_b + ')'
+	}
+	return rgba
 }
 
-function findParentBackgroundColor(parentElement: HTMLElement | null):string {
+function findParentBackgroundColor(parentElement: HTMLElement | null): string {
 	const ignoreColor = 'rgba(0, 0, 0, 0)'
 	let currentParent = parentElement
 	while (currentParent !== null) {
@@ -414,13 +423,16 @@ function createBackgroundAndBorderBox(
 	bounds: DOMRectReadOnly,
 	styles: CSSStyleDeclaration,
 	context: Pick<TraversalContext, 'svgDocument'>,
-    parentElement: HTMLElement | null
+	parentElement: HTMLElement | null
 ): SVGRectElement {
 	const background = createBox(bounds, context)
 
 	// TODO handle background image and other properties
 	if (styles.backgroundColor) {
-		background.setAttribute('fill', convertRGBAtoRGB(styles.backgroundColor, findParentBackgroundColor(parentElement)))
+		background.setAttribute(
+			'fill',
+			convertRGBAtoRGB(styles.backgroundColor, findParentBackgroundColor(parentElement))
+		)
 	}
 
 	if (hasUniformBorder(styles)) {
