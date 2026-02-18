@@ -12,23 +12,24 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 22.x, 24.x]
+        node-version: [24.x, 25.x]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: ${{ matrix.node-version }}
 
     - name: Build
       run: |
         npm install
+        npx tsc
         npx webpack
 
     - name: Upload compiled JS
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: compiled-js
         path: dist/dom2svg.js
