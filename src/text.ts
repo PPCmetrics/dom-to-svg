@@ -36,6 +36,7 @@ export function handleTextNode(textNode: Text, context: TraversalContext): void 
 	const lineRange = textNode.ownerDocument.createRange()
 	lineRange.setStart(textNode, 0)
 	lineRange.setEnd(textNode, 0)
+	const characterRange = textNode.ownerDocument.createRange()
 	while (true) {
 		const addTextSpanForLineRange = (): void => {
 			if (lineRange.collapsed) {
@@ -54,24 +55,38 @@ export function handleTextNode(textNode: Text, context: TraversalContext): void 
 			// For this to work, the parent element must not forbid user selection.
 			const previousUserSelect = parentElement.style.userSelect
 			parentElement.style.userSelect = 'all'
+			let collapsedText: string
 			try {
 				selection.removeAllRanges()
 				selection.addRange(lineRange)
-				textSpan.textContent = selection
-					.toString()
-					// SVG does not support tabs in text. Tabs get rendered as one space character. Convert the
-					// tabs to spaces according to tab-size instead.
-					// Ideally we would keep the tab and create offset tspans.
-					.replace(/\t/g, ' '.repeat(tabSize))
+				collapsedText = selection.toString()
 			} finally {
 				parentElement.style.userSelect = previousUserSelect
 				selection.removeAllRanges()
 			}
-			if (styles.getPropertyValue('transform') === 'matrix(-1, 0, 0, -1, 0, 0)' && isLTR) {
+			// SVG does not support tabs in text. Tabs get rendered as one space character. Convert the
+			// tabs to spaces according to tab-size instead.
+			// Ideally we would keep the tab and create offset tspans.
+			textSpan.textContent = collapsedText.replace(/\t/g, ' '.repeat(tabSize))
+
+			const useMirroredTransform = styles.getPropertyValue('transform') === 'matrix(-1, 0, 0, -1, 0, 0)' && isLTR
+			// Per-character x positions make the rendered text robust against consumers (e.g. Inkscape's
+			// EMF export) that don't support textLength/lengthAdjust="spacingAndGlyphs" and would otherwise
+			// draw text at the substituted font's natural width, causing it to overlap following text.
+			const characterXPositions =
+				!isLTR && !useMirroredTransform
+					? getCharacterXPositions(characterRange, textNode, lineRange, collapsedText, tabSize)
+					: undefined
+			if (useMirroredTransform) {
 				textSpan.setAttribute('x', (-1 * (lineRectangle.x + lineRectangle.width)).toString())
 				textSpan.setAttribute('y', (-1 * (lineRectangle.top + lineRectangle.height)).toString())
 			} else {
-				textSpan.setAttribute('x', lineRectangle.x.toString())
+				textSpan.setAttribute(
+					'x',
+					characterXPositions && characterXPositions.length > 0
+						? characterXPositions.join(' ')
+						: lineRectangle.x.toString()
+				)
 				textSpan.setAttribute('y', isLTR ? lineRectangle.top.toString() : lineRectangle.bottom.toString()) // intentionally bottom because of dominant-baseline setting
 			}
 			textSpan.setAttribute(
@@ -112,6 +127,58 @@ export function handleTextNode(textNode: Text, context: TraversalContext): void 
 	}
 
 	context.currentSvgParent.append(svgTextElement)
+}
+
+/**
+ * Computes the x coordinate of each character of `collapsedText` (the whitespace-collapsed text
+ * that will actually be rendered), by aligning it against the raw (uncollapsed) text of `lineRange`
+ * and measuring each aligned character's position individually.
+ * Returns `undefined` if the alignment is not reliable (falls back to a single x value for the line).
+ */
+function getCharacterXPositions(
+	characterRange: Range,
+	textNode: Text,
+	lineRange: Range,
+	collapsedText: string,
+	tabSize: number
+): number[] | undefined {
+	const rawText = textNode.data.slice(lineRange.startOffset, lineRange.endOffset)
+
+	// Align each character of collapsedText to the index of the same character in rawText.
+	// Whitespace collapsing only ever removes characters, it never reorders or replaces them,
+	// so a simple greedy left-to-right scan is sufficient.
+	const rawIndices: number[] = []
+	let rawIndex = 0
+	for (const character of collapsedText) {
+		while (rawIndex < rawText.length && rawText[rawIndex] !== character) {
+			rawIndex++
+		}
+		if (rawIndex >= rawText.length) {
+			// Alignment failed, e.g. because of a character substitution we didn't anticipate.
+			return undefined
+		}
+		rawIndices.push(rawIndex)
+		rawIndex++
+	}
+
+	const positions: number[] = []
+	for (const index of rawIndices) {
+		characterRange.setStart(textNode, lineRange.startOffset + index)
+		characterRange.setEnd(textNode, lineRange.startOffset + index + 1)
+		const rectangle = characterRange.getClientRects()[0]
+		if (!rectangle) {
+			return undefined
+		}
+		if (rawText[index] === '\t') {
+			// Tabs are expanded into `tabSize` spaces in the output text, all placed at the tab's position.
+			for (let tabStop = 0; tabStop < tabSize; tabStop++) {
+				positions.push(rectangle.x)
+			}
+		} else {
+			positions.push(rectangle.x)
+		}
+	}
+	return positions
 }
 
 export const textAttributes = new Set([
