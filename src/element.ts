@@ -429,9 +429,15 @@ function createBackgroundAndBorderBox(
 
 	// TODO handle background image and other properties
 	if (styles.backgroundColor) {
+		// A fully transparent background must stay transparent. Blending it against the nearest
+		// non-transparent ancestor background (or falling back to "no color found") would otherwise
+		// incorrectly paint an opaque box (e.g. opaque black when no ancestor has a background color),
+		// hiding/overlapping any content painted earlier in document order.
 		background.setAttribute(
 			'fill',
-			convertRGBAtoRGB(styles.backgroundColor, findParentBackgroundColor(parentElement))
+			isTransparent(styles.backgroundColor)
+				? 'none'
+				: convertRGBAtoRGB(styles.backgroundColor, findParentBackgroundColor(parentElement))
 		)
 	}
 
