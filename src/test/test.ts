@@ -62,6 +62,8 @@ describe('documentToSVG()', () => {
 				'--disable-web-security',
 				'--font-render-hinting=none',
 				'--enable-font-antialiasing',
+				// CI runners don't have a usable Chrome sandbox
+				...(process.env.CI ? ['--no-sandbox', '--disable-setuid-sandbox'] : []),
 			],
 			timeout: 0,
 			// slowMo: 100,
