@@ -1,8 +1,9 @@
 {
 	"compilerOptions": {
 		"target": "ES2019",
-		"module": "ES2020",
-		"moduleResolution": "node",
+		"module": "NodeNext",
+		"moduleResolution": "nodenext",
+		"forceConsistentCasingInFileNames": true,
 		"outDir": "lib",
 		"rootDir": "src",
 		"sourceMap": true,
@@ -15,8 +16,10 @@
 		"skipLibCheck": true,
 		"skipDefaultLibCheck": true,
 		"noUncheckedIndexedAccess": true,
+		// gradient-parser ships no types; nodenext's ESM resolution doesn't do directory/index
+		// fallback for "paths" substitutions, so point straight at the shim file.
 		"paths": {
-			"*": ["./src/types/*", "./*"],
+			"gradient-parser": ["./src/types/gradient-parser/index.d.ts"],
 		},
 	},
 	"include": ["src/**/*"],

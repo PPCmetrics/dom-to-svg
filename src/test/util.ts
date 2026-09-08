@@ -32,8 +32,11 @@ export async function readFileOrUndefined(filePath: string): Promise<string | un
 	try {
 		return await readFile(filePath, 'utf-8')
 	} catch (error) {
-		if (error.code === 'ENOENT') {
+		if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
 			return undefined
+		}
+		if (!(error instanceof Error)) {
+			throw new TypeError(String(error))
 		}
 		throw error
 	}

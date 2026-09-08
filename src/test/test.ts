@@ -5,7 +5,10 @@ import { fileURLToPath, pathToFileURL } from 'url'
 import * as util from 'util'
 
 import { MODE, Polly } from '@pollyjs/core'
-import FSPersister from '@pollyjs/persister-fs'
+// The @types package declares `export default`, which under nodenext resolves to the whole
+// namespace rather than the default export; require-import + .default sidesteps that.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import FSPersisterModule = require('@pollyjs/persister-fs')
 import { assert } from 'chai'
 import delay from 'delay'
 import ParcelBundler from 'parcel-bundler'
@@ -143,7 +146,7 @@ describe('documentToSVG()', () => {
 						order: false,
 						headers: false,
 					},
-					persister: FSPersister,
+					persister: FSPersisterModule.default,
 					persisterOptions: {
 						fs: {
 							recordingsDir: path.resolve(root, 'src/test/recordings'),

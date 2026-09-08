@@ -1,4 +1,7 @@
-import PollyAdapter from '@pollyjs/adapter'
+// The @types package declares `export default`, which under nodenext resolves to the whole
+// namespace rather than the default export; require-import + .default sidesteps that.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import PollyAdapterModule = require('@pollyjs/adapter')
 import { Polly, Request as PollyRequest } from '@pollyjs/core'
 import * as chardet from 'chardet'
 import contentType from 'content-type'
@@ -50,7 +53,7 @@ interface PollyRequestArguments {
  * and handles all request resource types.
  *
  */
-export class PuppeteerAdapter extends PollyAdapter {
+export class PuppeteerAdapter extends PollyAdapterModule.default {
 	private subscriptions = new Subscription()
 
 	/**

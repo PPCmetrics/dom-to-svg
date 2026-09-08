@@ -99,10 +99,13 @@ export function handleTextNode(textNode: Text, context: TraversalContext): void 
 		try {
 			lineRange.setEnd(textNode, lineRange.endOffset + 1)
 		} catch (error) {
-			if ((error as DOMException).code === DOMException.INDEX_SIZE_ERR) {
+			if (error instanceof DOMException && error.code === DOMException.INDEX_SIZE_ERR) {
 				// Reached the end
 				addTextSpanForLineRange()
 				break
+			}
+			if (!(error instanceof Error)) {
+				throw new TypeError(String(error))
 			}
 			throw error
 		}
