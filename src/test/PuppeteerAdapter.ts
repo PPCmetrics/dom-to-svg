@@ -42,7 +42,7 @@ interface PollyRequestArguments {
 	requestArguments: { request: Puppeteer.Request }
 }
 
-const PollyAdapter = PollyAdapterModule as unknown as typeof PollyAdapterModule.default
+const PollyAdapter = (PollyAdapterModule as unknown) as typeof PollyAdapterModule.default
 
 /**
  * A Puppeteer adapter for Polly that supports all request resource types.

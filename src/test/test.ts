@@ -26,7 +26,7 @@ import { createDeferred, readFileOrUndefined } from './util.js'
 util.inspect.defaultOptions.depth = 0
 util.inspect.defaultOptions.maxStringLength = 80
 
-const FSPersister = FSPersisterModule as unknown as typeof FSPersisterModule.default
+const FSPersister = (FSPersisterModule as unknown) as typeof FSPersisterModule.default
 
 Polly.register(PuppeteerAdapter as any)
 
