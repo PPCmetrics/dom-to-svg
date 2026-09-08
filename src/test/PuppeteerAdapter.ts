@@ -1,5 +1,6 @@
-// The @types package declares `export default`, which under nodenext resolves to the whole
-// namespace rather than the default export; require-import + .default sidesteps that.
+// The @types package declares `export default`, but the actual published JS is plain CommonJS
+// (`module.exports = Adapter`, no `.default` wrapper) so accessing `.default` at runtime is
+// `undefined`. Keep the raw `require` result (the real class) and cast past the type mismatch.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import PollyAdapterModule = require('@pollyjs/adapter')
 import { Polly, Request as PollyRequest } from '@pollyjs/core'
@@ -41,6 +42,8 @@ interface PollyRequestArguments {
 	requestArguments: { request: Puppeteer.Request }
 }
 
+const PollyAdapter = PollyAdapterModule as unknown as typeof PollyAdapterModule.default
+
 /**
  * A Puppeteer adapter for Polly that supports all request resource types.
  *
@@ -53,7 +56,7 @@ interface PollyRequestArguments {
  * and handles all request resource types.
  *
  */
-export class PuppeteerAdapter extends PollyAdapterModule.default {
+export class PuppeteerAdapter extends PollyAdapter {
 	private subscriptions = new Subscription()
 
 	/**

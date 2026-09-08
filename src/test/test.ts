@@ -5,8 +5,9 @@ import { fileURLToPath, pathToFileURL } from 'url'
 import * as util from 'util'
 
 import { MODE, Polly } from '@pollyjs/core'
-// The @types package declares `export default`, which under nodenext resolves to the whole
-// namespace rather than the default export; require-import + .default sidesteps that.
+// The @types package declares `export default`, but the actual published JS is plain CommonJS
+// (`module.exports = FSPersister`, no `.default` wrapper) so accessing `.default` at runtime is
+// `undefined`. Keep the raw `require` result (the real class) and cast past the type mismatch.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import FSPersisterModule = require('@pollyjs/persister-fs')
 import { assert } from 'chai'
@@ -24,6 +25,8 @@ import { createDeferred, readFileOrUndefined } from './util.js'
 // Reduce log verbosity
 util.inspect.defaultOptions.depth = 0
 util.inspect.defaultOptions.maxStringLength = 80
+
+const FSPersister = FSPersisterModule as unknown as typeof FSPersisterModule.default
 
 Polly.register(PuppeteerAdapter as any)
 
@@ -146,7 +149,7 @@ describe('documentToSVG()', () => {
 						order: false,
 						headers: false,
 					},
-					persister: FSPersisterModule.default,
+					persister: FSPersister,
 					persisterOptions: {
 						fs: {
 							recordingsDir: path.resolve(root, 'src/test/recordings'),
