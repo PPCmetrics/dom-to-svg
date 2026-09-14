@@ -39,9 +39,6 @@
 		"timeout": 150000,
 		"exit": true,
 		"enableSourceMaps": true,
-		"watchFiles": [
-			"lib/**/*.js"
-		],
 		"node-option": [
 			"import=tsx"
 		]
@@ -122,5 +119,15 @@
 	},
 	"overrides": {
 		"@types/lodash": "4.14.169"
+	},
+	"allowScripts": {
+		"core-js@2.6.12": true,
+		"core-js@3.50.0": true,
+		"core-js-pure@3.50.0": true,
+		"deasync@0.1.31": true,
+		"esbuild@0.28.2": true,
+		"husky@4.3.0": true,
+		"parcel-bundler@1.12.5": true,
+		"puppeteer@5.4.0": true
 	}
 }
