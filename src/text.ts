@@ -77,23 +77,24 @@ export function handleTextNode(textNode: Text, context: TraversalContext): void 
 				!isLTR && !useMirroredTransform
 					? getCharacterXPositions(characterRange, textNode, lineRange, collapsedText, tabSize)
 					: undefined
+			const hasCharacterXPositions = !!characterXPositions && characterXPositions.length > 0
 			if (useMirroredTransform) {
 				textSpan.setAttribute('x', (-1 * (lineRectangle.x + lineRectangle.width)).toString())
 				textSpan.setAttribute('y', (-1 * (lineRectangle.top + lineRectangle.height)).toString())
 			} else {
-				textSpan.setAttribute(
-					'x',
-					characterXPositions && characterXPositions.length > 0
-						? characterXPositions.join(' ')
-						: lineRectangle.x.toString()
-				)
+				textSpan.setAttribute('x', hasCharacterXPositions ? characterXPositions!.join(' ') : lineRectangle.x.toString())
 				textSpan.setAttribute('y', isLTR ? lineRectangle.top.toString() : lineRectangle.bottom.toString()) // intentionally bottom because of dominant-baseline setting
 			}
-			textSpan.setAttribute(
-				'textLength',
-				isLTR ? lineRectangle.height.toString() : lineRectangle.width.toString()
-			)
-			textSpan.setAttribute('lengthAdjust', 'spacingAndGlyphs')
+			// textLength/lengthAdjust="spacingAndGlyphs" is only needed as a fallback for consumers that
+			// don't support per-character x positions. Setting both at once causes some renderers (e.g.
+			// Chromium) to double-apply glyph scaling, squishing the text into an illegible blob.
+			if (!hasCharacterXPositions) {
+				textSpan.setAttribute(
+					'textLength',
+					isLTR ? lineRectangle.height.toString() : lineRectangle.width.toString()
+				)
+				textSpan.setAttribute('lengthAdjust', 'spacingAndGlyphs')
+			}
 			svgTextElement.append(textSpan)
 		}
 		try {
