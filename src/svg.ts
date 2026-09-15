@@ -113,8 +113,12 @@ export function handleSvgElement(element: SVGElement, context: SvgTraversalConte
 			}
 		}
 
-		const window = element.ownerDocument.defaultView
-		assert(window, "Element's ownerDocument has no defaultView")
+		// `element` may belong to a windowless document (e.g. one created via
+		// `DOMImplementation.createDocument()`, as `inlineResources()` does when embedding a fetched
+		// SVG resource) — `getComputedStyle()` still works fine called on an element belonging to a
+		// different document, so fall back to the real browser window in that case.
+		const window = element.ownerDocument.defaultView ?? globalThis.window
+		assert(window, "Element's ownerDocument has no defaultView and no global window is available")
 
 		const svgViewportElement = element.ownerSVGElement
 		assert(svgViewportElement, 'Expected element to have ownerSVGElement')

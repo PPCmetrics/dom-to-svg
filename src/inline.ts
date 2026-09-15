@@ -16,9 +16,47 @@ declare global {
  * Fonts and binary images are inlined as Base64 data: URIs.
  *
  * Images that reference another SVG are inlined by inlining the embedded SVG into the output SVG.
- * Note: The passed element needs to be attached to a document with a window (`defaultView`) for this so that `getComputedStyle()` can be used.
+ * This requires computing styles and transforms (`getComputedStyle()`, `getCTM()`, `getScreenCTM()`) on
+ * elements of the embedded SVG, which only return meaningful values for elements that are part of an
+ * actually rendered document. The document produced by `documentToSVG()`/`elementToSVG()` (via
+ * `DOMImplementation.createDocument()`) is never attached to any window/page, so if `element` isn't
+ * connected to a rendered document, it is temporarily attached (positioned off-screen, so it doesn't
+ * visibly flicker) to the live page for the duration of the call, then restored to its original
+ * position. Note this deliberately does NOT use `visibility: hidden` (or `display: none`) to hide it:
+ * `visibility` is an inherited CSS property, so it would be picked up by `getComputedStyle()` on every
+ * descendant and baked into the cloned output as a permanent `visibility="hidden"` attribute.
  */
 export async function inlineResources(element: Element): Promise<void> {
+	if (!element.ownerDocument.defaultView) {
+		assert(globalThis.document?.body, 'inlineResources() requires a live document with a <body> to render into')
+		const originalDocument = element.ownerDocument
+		const originalParent = element.parentNode
+		const originalNextSibling = element.nextSibling
+		const originalStyle = element.getAttribute('style')
+		if ('style' in element) {
+			const { style } = element as HTMLElement | SVGElement
+			style.setProperty('position', 'fixed')
+			style.setProperty('top', '-99999px')
+			style.setProperty('left', '-99999px')
+		}
+		globalThis.document.body.append(element) // Auto-adopts element (and its subtree) into the live document.
+		try {
+			await inlineResources(element)
+		} finally {
+			if (originalStyle === null) {
+				element.removeAttribute('style')
+			} else {
+				element.setAttribute('style', originalStyle)
+			}
+			if (originalParent) {
+				originalParent.insertBefore(element, originalNextSibling) // Re-adopts back into the original document.
+			} else {
+				// `element` was its document's root element (e.g. `svgDocument.documentElement`): restore it as such.
+				originalDocument.append(element)
+			}
+		}
+		return
+	}
 	await Promise.all([
 		...[...element.children].map(inlineResources),
 		(async () => {
@@ -38,6 +76,16 @@ export async function inlineResources(element: Element): Promise<void> {
 						'image/svg+xml'
 					) as XMLDocument
 					const svgRoot = (embeddedSvgDocument.documentElement as Element) as SVGSVGElement
+					// If the embedded SVG has no viewBox, its content is in the same units as its own
+					// width/height, so overwriting width/height below without a matching viewBox would
+					// change the SVG's coordinate system and mis-scale (rather than scale) its content.
+					if (!svgRoot.hasAttribute('viewBox')) {
+						const originalWidth = Number.parseFloat(svgRoot.getAttribute('width') ?? '')
+						const originalHeight = Number.parseFloat(svgRoot.getAttribute('height') ?? '')
+						if (!Number.isNaN(originalWidth) && !Number.isNaN(originalHeight)) {
+							svgRoot.setAttribute('viewBox', `0 0 ${originalWidth} ${originalHeight}`)
+						}
+					}
 					svgRoot.setAttribute('x', element.getAttribute('x')!)
 					svgRoot.setAttribute('y', element.getAttribute('y')!)
 					svgRoot.setAttribute('width', element.getAttribute('width')!)

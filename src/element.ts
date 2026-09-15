@@ -165,6 +165,13 @@ export function handleElement(element: Element, context: Readonly<TraversalConte
 					const span = element.ownerDocument.createElement('span')
 					span.dataset.pseudoElement = '::marker'
 					copyCssStyles(markerStyles, span.style)
+					// The computed `width` of `::marker` reflects the native marker box, sized to fit only
+					// the marker symbol/number, not the trailing separator (space or ". ") that
+					// `getListItemMarkerContent()` appends. Copying it verbatim would constrain our
+					// synthetic span to that narrower width, causing the separator (meant to create a gap
+					// before the list item's text) to overflow and overlap the text instead. Let the span's
+					// width be determined by its own (slightly longer) content instead.
+					span.style.width = 'auto'
 					span.textContent = markerContent
 					element.dataset.pseudoElementOwner = id
 					cleanupFunctions.push(() => element.removeAttribute('data-pseudo-element-owner'))
@@ -184,7 +191,12 @@ export function handleElement(element: Element, context: Readonly<TraversalConte
 						}
 						span.style.position = 'absolute'
 						span.style.right = '100%'
-						span.style.whiteSpace = 'nowrap'
+						// Use `pre` rather than `nowrap`: both prevent wrapping, but `nowrap` still collapses
+						// whitespace, which would strip the trailing separator space/period that
+						// `getListItemMarkerContent()` appends (since this span forms its own isolated line
+						// box, that trailing space is otherwise collapsed away, leaving the marker glued to
+						// the list item's text with no gap).
+						span.style.whiteSpace = 'pre'
 						element.prepend(span)
 					}
 					cleanupFunctions.push(() => span.remove())
