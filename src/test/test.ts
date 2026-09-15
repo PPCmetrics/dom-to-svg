@@ -234,8 +234,10 @@ describe('documentToSVG()', () => {
 				await svgPage.goto(pathToFileURL(svgFilePath).href)
 				// addStyleTag() assumes a <head>/<body>, which the SVG document doesn't have.
 				await svgPage.evaluate(cssContent => {
+					// eslint-disable-next-line no-restricted-globals
 					const style = document.createElementNS('http://www.w3.org/2000/svg', 'style')
 					style.textContent = cssContent
+					// eslint-disable-next-line no-restricted-globals
 					document.documentElement.append(style)
 				}, systemFontOverrideCSS)
 				// await new Promise<never>(() => {})
