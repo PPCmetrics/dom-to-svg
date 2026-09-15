@@ -156,7 +156,40 @@ export function handleElement(element: Element, context: Readonly<TraversalConte
 			}
 			handlePseudoElement('::before', 'prepend')
 			handlePseudoElement('::after', 'append')
-			// TODO handle ::marker etc
+
+			// Handle ::marker (list item bullets/numbers) the same way, by creating a real DOM equivalent.
+			if (styles.display === 'list-item') {
+				const markerContent = getListItemMarkerContent(element, styles, window)
+				if (markerContent !== null) {
+					const markerStyles = window.getComputedStyle(element, '::marker')
+					const span = element.ownerDocument.createElement('span')
+					span.dataset.pseudoElement = '::marker'
+					copyCssStyles(markerStyles, span.style)
+					span.textContent = markerContent
+					element.dataset.pseudoElementOwner = id
+					cleanupFunctions.push(() => element.removeAttribute('data-pseudo-element-owner'))
+					const style = element.ownerDocument.createElement('style')
+					// Hide the *actual* marker temporarily while we have a real DOM equivalent in the DOM
+					style.textContent = `[data-pseudo-element-owner="${id}"]::marker { content: none !important; }`
+					element.before(style)
+					cleanupFunctions.push(() => style.remove())
+					if (styles.listStylePosition === 'inside') {
+						element.prepend(span)
+					} else {
+						// Outside markers are not part of the flow: hang them off the start edge of the element
+						// using the same technique authors used before ::marker existed.
+						if (styles.position === 'static') {
+							element.style.position = 'relative'
+							cleanupFunctions.push(() => element.style.removeProperty('position'))
+						}
+						span.style.position = 'absolute'
+						span.style.right = '100%'
+						span.style.whiteSpace = 'nowrap'
+						element.prepend(span)
+					}
+					cleanupFunctions.push(() => span.remove())
+				}
+			}
 		}
 
 		if (rectanglesIntersect) {
@@ -256,6 +289,128 @@ export function handleElement(element: Element, context: Readonly<TraversalConte
 			cleanup()
 		}
 	}
+}
+
+// Determines the text to render for a list item's ::marker (e.g. a bullet or ordinal), or null if none should be
+// rendered. Includes a trailing separator (space, or ". ") so it can be inserted directly as text content.
+function getListItemMarkerContent(element: HTMLElement, styles: CSSStyleDeclaration, window: Window): string | null {
+	const markerStyles = window.getComputedStyle(element, '::marker')
+	// Respect an explicit `content` declared on ::marker, which takes precedence over `list-style-type`.
+	if (markerStyles.content !== 'normal') {
+		const content = cssValueParser(markerStyles.content).nodes.find(isTaggedUnionMember('type', 'string' as const))
+		return content ? `${unescapeStringValue(content.value)} ` : null
+	}
+
+	if (styles.listStyleType === 'none') {
+		return null
+	}
+
+	switch (styles.listStyleType) {
+		case 'disc':
+			return '\u2022 '
+		case 'circle':
+			return '\u25E6 '
+		case 'square':
+			return '\u25AA '
+		case 'disclosure-open':
+			return '\u25BE '
+		case 'disclosure-closed':
+			return '\u25B8 '
+	}
+
+	const ordinal = getListItemOrdinal(element)
+	if (ordinal === null) {
+		// Custom counter styles (e.g. `@counter-style`, CJK, Armenian, etc.) aren't supported: fall back to a bullet.
+		return '\u2022 '
+	}
+
+	switch (styles.listStyleType) {
+		case 'decimal-leading-zero':
+			return `${ordinal >= 0 && ordinal < 10 ? '0' : ''}${ordinal}. `
+		case 'lower-roman':
+			return `${toRomanNumeral(ordinal).toLowerCase()}. `
+		case 'upper-roman':
+			return `${toRomanNumeral(ordinal)}. `
+		case 'lower-alpha':
+		case 'lower-latin':
+			return `${toAlphabeticNumeral(ordinal).toLowerCase()}. `
+		case 'upper-alpha':
+		case 'upper-latin':
+			return `${toAlphabeticNumeral(ordinal)}. `
+		default:
+			return `${ordinal}. `
+	}
+}
+
+// Determines the ordinal value of a list item among its siblings, honoring `<ol start>`/`reversed` and `<li value>`.
+function getListItemOrdinal(element: HTMLElement): number | null {
+	const parent = element.parentElement
+	if (!parent) {
+		return null
+	}
+	const siblings = [...parent.children].filter(child => child.tagName === 'LI')
+	const reversed = parent.tagName === 'OL' && parent.hasAttribute('reversed')
+	const startAttribute = parent.getAttribute('start')
+	let current =
+		startAttribute && /^-?\d+$/.test(startAttribute) ? parseInt(startAttribute, 10) : reversed ? siblings.length : 1
+	const step = reversed ? -1 : 1
+	for (const sibling of siblings) {
+		const valueAttribute = sibling.getAttribute('value')
+		if (valueAttribute && /^-?\d+$/.test(valueAttribute)) {
+			current = parseInt(valueAttribute, 10)
+		}
+		if (sibling === element) {
+			return current
+		}
+		current += step
+	}
+	return null
+}
+
+const romanNumerals: readonly (readonly [number, string])[] = [
+	[1000, 'M'],
+	[900, 'CM'],
+	[500, 'D'],
+	[400, 'CD'],
+	[100, 'C'],
+	[90, 'XC'],
+	[50, 'L'],
+	[40, 'XL'],
+	[10, 'X'],
+	[9, 'IX'],
+	[5, 'V'],
+	[4, 'IV'],
+	[1, 'I'],
+]
+
+function toRomanNumeral(number: number): string {
+	if (number <= 0 || number > 3999) {
+		return String(number)
+	}
+	let remaining = number
+	let result = ''
+	for (const [value, numeral] of romanNumerals) {
+		while (remaining >= value) {
+			result += numeral
+			remaining -= value
+		}
+	}
+	return result
+}
+
+// Bijective base-26 numeration: 1 -> A, 2 -> B, ..., 26 -> Z, 27 -> AA, 28 -> AB, ...
+function toAlphabeticNumeral(number: number): string {
+	if (number <= 0) {
+		return String(number)
+	}
+	let remaining = number
+	let result = ''
+	while (remaining > 0) {
+		const remainder = (remaining - 1) % 26
+		result = String.fromCharCode(65 + remainder) + result
+		remaining = Math.floor((remaining - 1) / 26)
+	}
+	return result
 }
 
 function addBackgroundAndBorders(
