@@ -48,8 +48,10 @@ export async function inlineResources(element: Element): Promise<void> {
 			} else {
 				element.setAttribute('style', originalStyle)
 			}
-			if (originalParent) {
-				originalParent.insertBefore(element, originalNextSibling) // Re-adopts back into the original document.
+			if (originalNextSibling) {
+				originalNextSibling.before(element) // Re-adopts back into the original document.
+			} else if (originalParent) {
+				originalParent.append(element) // Re-adopts back into the original document.
 			} else {
 				// `element` was its document's root element (e.g. `svgDocument.documentElement`): restore it as such.
 				originalDocument.append(element)
