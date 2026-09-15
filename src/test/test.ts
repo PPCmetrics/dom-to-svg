@@ -45,6 +45,31 @@ console.log('Using Polly mode', mode)
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
+// Override system font to Arial to make screenshots deterministic cross-platform. Applied to both
+// the original page and the page rendering the generated SVG, since the generated SVG doesn't
+// capture this (it's an inline style with no stylesheet href, and the source is a local() font,
+// not a URL that inlineResources() could inline).
+const systemFontOverrideCSS = css`
+	@font-face {
+		font-family: system-ui;
+		font-style: normal;
+		font-weight: 300;
+		src: local('Arial');
+	}
+	@font-face {
+		font-family: -apple-system;
+		font-style: normal;
+		font-weight: 300;
+		src: local('Arial');
+	}
+	@font-face {
+		font-family: BlinkMacSystemFont;
+		font-style: normal;
+		font-weight: 300;
+		src: local('Arial');
+	}
+`
+
 describe('documentToSVG()', () => {
 	let browser: puppeteer.Browser
 	let server: Server
@@ -182,29 +207,7 @@ describe('documentToSVG()', () => {
 				})
 				await page.waitForTimeout(2000)
 				await page.mouse.click(0, 0)
-				// Override system font to Arial to make screenshots deterministic cross-platform
-				await page.addStyleTag({
-					content: css`
-						@font-face {
-							font-family: system-ui;
-							font-style: normal;
-							font-weight: 300;
-							src: local('Arial');
-						}
-						@font-face {
-							font-family: -apple-system;
-							font-style: normal;
-							font-weight: 300;
-							src: local('Arial');
-						}
-						@font-face {
-							font-family: BlinkMacSystemFont;
-							font-style: normal;
-							font-weight: 300;
-							src: local('Arial');
-						}
-					`,
-				})
+				await page.addStyleTag({ content: systemFontOverrideCSS })
 				// await new Promise<never>(() => {})
 			})
 
@@ -229,6 +232,12 @@ describe('documentToSVG()', () => {
 				await writeFile(svgFilePath, generatedSVGMarkupFormatted)
 				svgPage = await browser.newPage()
 				await svgPage.goto(pathToFileURL(svgFilePath).href)
+				// addStyleTag() assumes a <head>/<body>, which the SVG document doesn't have.
+				await svgPage.evaluate(cssContent => {
+					const style = document.createElementNS('http://www.w3.org/2000/svg', 'style')
+					style.textContent = cssContent
+					document.documentElement.append(style)
+				}, systemFontOverrideCSS)
 				// await new Promise<never>(() => {})
 			})
 			after('Close SVG page', () => svgPage?.close())
