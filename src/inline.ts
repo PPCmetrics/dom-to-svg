@@ -2,7 +2,7 @@ import * as postcss from 'postcss'
 import cssValueParser from 'postcss-value-parser'
 
 import { unescapeStringValue } from './css.js'
-import { isSVGImageElement, isSVGStyleElement, svgNamespace } from './dom.js'
+import { isSVGImageElement, isSVGStyleElement, svgNamespace, xlinkNamespace } from './dom.js'
 import { handleSvgNode } from './svg.js'
 import { withTimeout, assert } from './util.js'
 
@@ -71,7 +71,7 @@ export async function inlineResources(element: Element): Promise<void> {
 					// Inline binary images as base64 data: URL
 					const dataUrl = await blobToDataURL(blob)
 					element.dataset.src = element.href.baseVal
-					element.setAttribute('xlink:href', dataUrl.href)
+					element.setAttributeNS(xlinkNamespace, 'xlink:href', dataUrl.href)
 				}
 			} else if (isSVGStyleElement(element)) {
 				try {

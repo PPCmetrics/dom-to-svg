@@ -14,6 +14,7 @@ import {
 } from './css.js'
 import {
 	svgNamespace,
+	xlinkNamespace,
 	isHTMLAnchorElement,
 	isHTMLImageElement,
 	isHTMLInputElement,
@@ -206,7 +207,7 @@ export function handleElement(element: Element, context: Readonly<TraversalConte
 		) {
 			const svgImage = context.svgDocument.createElementNS(svgNamespace, 'image')
 			svgImage.id = `${id}-image` // read by inlineResources()
-			svgImage.setAttribute('xlink:href', element.currentSrc || element.src)
+			svgImage.setAttributeNS(xlinkNamespace, 'xlink:href', element.currentSrc || element.src)
 			const paddingLeft = parseCSSLength(styles.paddingLeft, bounds.width) ?? 0
 			const paddingRight = parseCSSLength(styles.paddingRight, bounds.width) ?? 0
 			const paddingTop = parseCSSLength(styles.paddingTop, bounds.height) ?? 0
@@ -304,7 +305,7 @@ function addBackgroundAndBorders(
 						// not the page. But we have no means to know what stylesheet the style came from
 						// (unless we iterate through all rules in all style sheets and find the matching one).
 						const url = new URL(unescapeStringValue(urlArgument.value), window.location.href)
-						image.setAttribute('xlink:href', url.href)
+						image.setAttributeNS(xlinkNamespace, 'xlink:href', url.href)
 
 						if (
 							backgroundRepeat === 'no-repeat' ||

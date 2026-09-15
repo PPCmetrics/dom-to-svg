@@ -7,6 +7,34 @@
       "name": "Sourcegraph Search"
     },
     {
+      "role": "text",
+      "name": "Your Sourcegraph license"
+    },
+    {
+      "role": "text",
+      "name": "expired 5 years ago"
+    },
+    {
+      "role": "text",
+      "name": ". "
+    },
+    {
+      "role": "text",
+      "name": " or "
+    },
+    {
+      "role": "link",
+      "name": "Renew now"
+    },
+    {
+      "role": "link",
+      "name": "contact Sourcegraph"
+    },
+    {
+      "role": "button",
+      "name": ""
+    },
+    {
       "role": "link",
       "name": ""
     },
@@ -345,51 +373,11 @@
     },
     {
       "role": "link",
-      "name": "jira"
-    },
-    {
-      "role": "text",
-      "name": "by"
-    },
-    {
-      "role": "text",
-      "name": "sourcegraph"
-    },
-    {
-      "role": "text",
-      "name": "WIP"
-    },
-    {
-      "role": "text",
-      "name": "Jira issue link previews and issue autocompletion on GitHub"
-    },
-    {
-      "role": "text",
-      "name": "Disabled"
+      "name": ""
     },
     {
       "role": "link",
-      "name": "snyk"
-    },
-    {
-      "role": "text",
-      "name": "by"
-    },
-    {
-      "role": "text",
-      "name": "sourcegraph"
-    },
-    {
-      "role": "text",
-      "name": "WIP"
-    },
-    {
-      "role": "text",
-      "name": "Provides code insights from Snyk reports"
-    },
-    {
-      "role": "text",
-      "name": "Disabled"
+      "name": ""
     },
     {
       "role": "link",
