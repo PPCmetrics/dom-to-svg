@@ -82,7 +82,10 @@ export function handleTextNode(textNode: Text, context: TraversalContext): void 
 				textSpan.setAttribute('x', (-1 * (lineRectangle.x + lineRectangle.width)).toString())
 				textSpan.setAttribute('y', (-1 * (lineRectangle.top + lineRectangle.height)).toString())
 			} else {
-				textSpan.setAttribute('x', hasCharacterXPositions ? characterXPositions!.join(' ') : lineRectangle.x.toString())
+				textSpan.setAttribute(
+					'x',
+					hasCharacterXPositions ? characterXPositions!.join(' ') : lineRectangle.x.toString()
+				)
 				textSpan.setAttribute('y', isLTR ? lineRectangle.top.toString() : lineRectangle.bottom.toString()) // intentionally bottom because of dominant-baseline setting
 			}
 			// textLength/lengthAdjust="spacingAndGlyphs" is only needed as a fallback for consumers that
