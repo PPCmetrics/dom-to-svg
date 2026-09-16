@@ -26,7 +26,21 @@ export function handleTextNode(textNode: Text, context: TraversalContext): void 
 	// https://css-tricks.com/svg-properties-and-css
 	copyTextStyles(styles, svgTextElement)
 
-	const isLTR = styles.getPropertyValue('writing-mode') === 'vertical-lr'
+	const writingMode = styles.getPropertyValue('writing-mode')
+	const isLTR = writingMode === 'vertical-lr'
+	const isVertical =
+		isLTR || writingMode === 'vertical-rl' || writingMode === 'sideways-rl' || writingMode === 'sideways-lr'
+	// Degrees to manually rotate each glyph by when falling back to per-character positioning for
+	// vertical text (see below) - that fallback stops relying on the writing-mode attribute, which
+	// would otherwise apply this rotation automatically.
+	const verticalGlyphRotationDegrees =
+		styles.getPropertyValue('text-orientation') === 'upright'
+			? 0
+			: writingMode === 'sideways-lr'
+			? -90
+			: writingMode === 'sideways-rl'
+			? 90
+			: 90 // vertical-rl/vertical-lr default ("mixed") orientation rotates glyphs 90deg clockwise
 
 	const tabSize = parseInt(styles.tabSize, 10)
 
@@ -70,31 +84,57 @@ export function handleTextNode(textNode: Text, context: TraversalContext): void 
 			textSpan.textContent = collapsedText.replace(/\t/g, ' '.repeat(tabSize))
 
 			const useMirroredTransform = styles.getPropertyValue('transform') === 'matrix(-1, 0, 0, -1, 0, 0)' && isLTR
-			// Per-character x positions make the rendered text robust against consumers (e.g. Inkscape's
-			// EMF export) that don't support textLength/lengthAdjust="spacingAndGlyphs" and would otherwise
-			// draw text at the substituted font's natural width, causing it to overlap following text.
-			const characterXPositions =
-				!isLTR && !useMirroredTransform
-					? getCharacterXPositions(characterRange, textNode, lineRange, collapsedText, tabSize)
-					: undefined
-			const hasCharacterXPositions = !!characterXPositions && characterXPositions.length > 0
+			// Per-character positions (x for horizontal text, y for vertical text) make the rendered text
+			// robust against consumers (e.g. Inkscape's EMF export) that don't support
+			// textLength/lengthAdjust="spacingAndGlyphs" or the SVG writing-mode attribute, and would
+			// otherwise draw every character on top of the others or at the substituted font's natural
+			// width/height.
+			const characterRects = !useMirroredTransform
+				? getCharacterRects(characterRange, textNode, lineRange, collapsedText, tabSize)
+				: undefined
+			const hasCharacterRects = !!characterRects && characterRects.length > 0
 			if (useMirroredTransform) {
 				textSpan.setAttribute('x', (-1 * (lineRectangle.x + lineRectangle.width)).toString())
 				textSpan.setAttribute('y', (-1 * (lineRectangle.top + lineRectangle.height)).toString())
+			} else if (isVertical) {
+				// Repeat the (fixed) column x for every character so the x/y lists are the same length -
+				// some SVG consumers mishandle a shorter x list by falling back to auto-advance for the
+				// remaining characters instead of per the spec (reusing the last explicit value).
+				textSpan.setAttribute(
+					'x',
+					hasCharacterRects ? characterRects!.map(() => lineRectangle.x).join(' ') : lineRectangle.x.toString()
+				)
+				textSpan.setAttribute(
+					'y',
+					hasCharacterRects
+						? characterRects!.map(rectangle => rectangle.bottom).join(' ')
+						: (isLTR ? lineRectangle.top : lineRectangle.bottom).toString() // intentionally bottom because of dominant-baseline setting
+				)
+				if (hasCharacterRects) {
+					// Placing each glyph at an explicit (x, y) takes over layout from the writing-mode
+					// attribute entirely for consumers that don't auto-rotate glyphs once per-character
+					// positions are given (e.g. Inkscape's EMF export leaves them upright) - so the rotation
+					// writing-mode would normally apply automatically has to be done manually here instead.
+					svgTextElement.setAttribute('writing-mode', 'horizontal-tb')
+					textSpan.setAttribute(
+						'rotate',
+						characterRects!.map(() => verticalGlyphRotationDegrees.toString()).join(' ')
+					)
+				}
 			} else {
 				textSpan.setAttribute(
 					'x',
-					hasCharacterXPositions ? characterXPositions!.join(' ') : lineRectangle.x.toString()
+					hasCharacterRects ? characterRects!.map(rectangle => rectangle.x).join(' ') : lineRectangle.x.toString()
 				)
-				textSpan.setAttribute('y', isLTR ? lineRectangle.top.toString() : lineRectangle.bottom.toString()) // intentionally bottom because of dominant-baseline setting
+				textSpan.setAttribute('y', lineRectangle.bottom.toString()) // intentionally bottom because of dominant-baseline setting
 			}
 			// textLength/lengthAdjust="spacingAndGlyphs" is only needed as a fallback for consumers that
-			// don't support per-character x positions. Setting both at once causes some renderers (e.g.
+			// don't support per-character positions. Setting both at once causes some renderers (e.g.
 			// Chromium) to double-apply glyph scaling, squishing the text into an illegible blob.
-			if (!hasCharacterXPositions) {
+			if (!hasCharacterRects) {
 				textSpan.setAttribute(
 					'textLength',
-					isLTR ? lineRectangle.height.toString() : lineRectangle.width.toString()
+					isVertical ? lineRectangle.height.toString() : lineRectangle.width.toString()
 				)
 				textSpan.setAttribute('lengthAdjust', 'spacingAndGlyphs')
 			}
@@ -137,18 +177,18 @@ export function handleTextNode(textNode: Text, context: TraversalContext): void 
 }
 
 /**
- * Computes the x coordinate of each character of `collapsedText` (the whitespace-collapsed text
- * that will actually be rendered), by aligning it against the raw (uncollapsed) text of `lineRange`
- * and measuring each aligned character's position individually.
- * Returns `undefined` if the alignment is not reliable (falls back to a single x value for the line).
+ * Computes the client rectangle of each character of `collapsedText` (the whitespace-collapsed
+ * text that will actually be rendered), by aligning it against the raw (uncollapsed) text of
+ * `lineRange` and measuring each aligned character's position individually.
+ * Returns `undefined` if the alignment is not reliable (falls back to a single position for the line).
  */
-function getCharacterXPositions(
+function getCharacterRects(
 	characterRange: Range,
 	textNode: Text,
 	lineRange: Range,
 	collapsedText: string,
 	tabSize: number
-): number[] | undefined {
+): DOMRect[] | undefined {
 	const rawText = textNode.data.slice(lineRange.startOffset, lineRange.endOffset)
 
 	// Align each character of collapsedText to the index of the same character in rawText.
@@ -168,7 +208,7 @@ function getCharacterXPositions(
 		rawIndex++
 	}
 
-	const positions: number[] = []
+	const rectangles: DOMRect[] = []
 	for (const index of rawIndices) {
 		characterRange.setStart(textNode, lineRange.startOffset + index)
 		characterRange.setEnd(textNode, lineRange.startOffset + index + 1)
@@ -179,13 +219,13 @@ function getCharacterXPositions(
 		if (rawText[index] === '\t') {
 			// Tabs are expanded into `tabSize` spaces in the output text, all placed at the tab's position.
 			for (let tabStop = 0; tabStop < tabSize; tabStop++) {
-				positions.push(rectangle.x)
+				rectangles.push(rectangle)
 			}
 		} else {
-			positions.push(rectangle.x)
+			rectangles.push(rectangle)
 		}
 	}
-	return positions
+	return rectangles
 }
 
 export const textAttributes = new Set([
