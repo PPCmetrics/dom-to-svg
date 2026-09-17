@@ -131,7 +131,9 @@ export function handleTextNode(textNode: Text, context: TraversalContext): void 
 			} else {
 				textSpan.setAttribute(
 					'x',
-					hasCharacterRects ? characterRects!.map(rectangle => rectangle.x).join(' ') : lineRectangle.x.toString()
+					hasCharacterRects
+						? characterRects!.map(rectangle => rectangle.x).join(' ')
+						: lineRectangle.x.toString()
 				)
 				textSpan.setAttribute('y', lineRectangle.bottom.toString()) // intentionally bottom because of dominant-baseline setting
 			}
