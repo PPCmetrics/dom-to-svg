@@ -97,12 +97,19 @@ export function handleTextNode(textNode: Text, context: TraversalContext): void 
 				textSpan.setAttribute('x', (-1 * (lineRectangle.x + lineRectangle.width)).toString())
 				textSpan.setAttribute('y', (-1 * (lineRectangle.top + lineRectangle.height)).toString())
 			} else if (isVertical) {
+				// Rotating a glyph via the SVG `rotate` attribute pivots it around its given (x, y) point
+				// rather than re-centering it, so a counter-clockwise rotation (negative degrees) swings the
+				// glyph's body out to the left of that point instead of to the right. Anchor to the far
+				// (right) edge of the line in that case so the rotated glyph body lands back inside the
+				// original line's bounds instead of poking out past its left edge.
+				const verticalPivotX =
+					verticalGlyphRotationDegrees < 0 ? lineRectangle.x + lineRectangle.width : lineRectangle.x
 				// Repeat the (fixed) column x for every character so the x/y lists are the same length -
 				// some SVG consumers mishandle a shorter x list by falling back to auto-advance for the
 				// remaining characters instead of per the spec (reusing the last explicit value).
 				textSpan.setAttribute(
 					'x',
-					hasCharacterRects ? characterRects!.map(() => lineRectangle.x).join(' ') : lineRectangle.x.toString()
+					hasCharacterRects ? characterRects!.map(() => verticalPivotX).join(' ') : lineRectangle.x.toString()
 				)
 				textSpan.setAttribute(
 					'y',
