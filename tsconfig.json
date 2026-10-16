@@ -16,11 +16,6 @@
 		"skipLibCheck": true,
 		"skipDefaultLibCheck": true,
 		"noUncheckedIndexedAccess": true,
-		// gradient-parser ships no types; nodenext's ESM resolution doesn't do directory/index
-		// fallback for "paths" substitutions, so point straight at the shim file.
-		"paths": {
-			"gradient-parser": ["./src/types/gradient-parser/index.d.ts"],
-		},
 	},
 	"include": ["src/**/*"],
 }

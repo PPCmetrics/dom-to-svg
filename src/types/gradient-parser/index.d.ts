@@ -1,4 +1,8 @@
-export type ColorStop = LiteralNode | HexNode | RgbNode | RgbaNode
+export interface StopLength {
+	type: '%' | 'px' | 'em' | 'position-keyword'
+	value: string
+}
+export type ColorStop = (LiteralNode | HexNode | RgbNode | RgbaNode) & { length?: StopLength }
 
 export interface LinearGradientNode {
 	type: 'linear-gradient'

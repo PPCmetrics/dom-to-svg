@@ -448,6 +448,7 @@ function addBackgroundAndBorders(
 				const xBackgroundPositions = styles.backgroundPositionX.split(/\s*,\s*/g)
 				const yBackgroundPositions = styles.backgroundPositionY.split(/\s*,\s*/g)
 				const backgroundRepeats = styles.backgroundRepeat.split(/\s*,\s*/g)
+				let hasGradientLayer = false
 				for (const [index, backgroundNode] of backgrounds.entries()) {
 					const backgroundPositionX = parseCSSLength(xBackgroundPositions[index]!, bounds.width) ?? 0
 					const backgroundPositionY = parseCSSLength(yBackgroundPositions[index]!, bounds.height) ?? 0
@@ -515,7 +516,7 @@ function addBackgroundAndBorders(
 						}
 					} else if (/^(-webkit-)?linear-gradient$/.test(backgroundNode.value)) {
 						const linearGradientCss = cssValueParser.stringify(backgroundNode)
-						const svgLinearGradient = convertLinearGradient(linearGradientCss, context)
+						const svgLinearGradient = convertLinearGradient(linearGradientCss, context, bounds)
 						if (backgroundPositionX !== 0 || backgroundPositionY !== 0) {
 							svgLinearGradient.setAttribute(
 								'gradientTransform',
@@ -523,9 +524,26 @@ function addBackgroundAndBorders(
 							)
 						}
 						svgLinearGradient.id = context.getUniqueId('linear-gradient')
-						box.before(svgLinearGradient)
-						box.setAttribute('fill', `url(#${svgLinearGradient.id})`)
+						const gradientLayer = createBox(bounds, context)
+						for (const attribute of ['rx', 'ry']) {
+							const value = box.getAttribute(attribute)
+							if (value !== null) {
+								gradientLayer.setAttribute(attribute, value)
+							}
+						}
+						gradientLayer.setAttribute('fill', `url(#${svgLinearGradient.id})`)
+						backgroundAndBordersContainer.append(svgLinearGradient, gradientLayer)
+						hasGradientLayer = true
 					}
+				}
+				if (hasGradientLayer && box.hasAttribute('stroke')) {
+					// Gradient layers are painted over the box, so move the border stroke above them.
+					const borderOverlay = box.cloneNode() as SVGRectElement
+					borderOverlay.setAttribute('fill', 'none')
+					for (const attribute of ['stroke', 'stroke-width', 'stroke-dasharray']) {
+						box.removeAttribute(attribute)
+					}
+					backgroundAndBordersContainer.append(borderOverlay)
 				}
 			}
 		}
