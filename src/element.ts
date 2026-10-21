@@ -448,6 +448,7 @@ function addBackgroundAndBorders(
 				const xBackgroundPositions = styles.backgroundPositionX.split(/\s*,\s*/g)
 				const yBackgroundPositions = styles.backgroundPositionY.split(/\s*,\s*/g)
 				const backgroundRepeats = styles.backgroundRepeat.split(/\s*,\s*/g)
+				const backgroundSizes = styles.backgroundSize.split(/\s*,\s*/g)
 				let hasGradientLayer = false
 				for (const [index, backgroundNode] of backgrounds.entries()) {
 					const backgroundPositionX = parseCSSLength(xBackgroundPositions[index]!, bounds.width) ?? 0
@@ -515,24 +516,77 @@ function addBackgroundAndBorders(
 							box.setAttribute('fill', `url(#${pattern.id})`)
 						}
 					} else if (/^(-webkit-)?linear-gradient$/.test(backgroundNode.value)) {
+						// `backgrounds` is reversed (bottom layer first), the CSS lists are not. Lists repeat if shorter.
+						const cssIndex = backgrounds.length - 1 - index
+						const pick = (list: string[], fallback: string): string =>
+							list[cssIndex % list.length] ?? fallback
+						const [cssTileWidth = 'auto', cssTileHeight = 'auto'] = pick(backgroundSizes, 'auto').split(
+							/\s+/
+						)
+						const tileWidth = parseCSSLength(cssTileWidth, bounds.width) ?? bounds.width
+						const tileHeight = parseCSSLength(cssTileHeight, bounds.height) ?? bounds.height
+						const tileX = resolveBackgroundPosition(
+							pick(xBackgroundPositions, '0%'),
+							bounds.width,
+							tileWidth
+						)
+						const tileY = resolveBackgroundPosition(
+							pick(yBackgroundPositions, '0%'),
+							bounds.height,
+							tileHeight
+						)
+						const repeat = pick(backgroundRepeats, 'repeat')
+						const repeatsX = repeat === 'repeat' || repeat === 'repeat-x'
+						const repeatsY = repeat === 'repeat' || repeat === 'repeat-y'
+
 						const linearGradientCss = cssValueParser.stringify(backgroundNode)
-						const svgLinearGradient = convertLinearGradient(linearGradientCss, context, bounds)
-						if (backgroundPositionX !== 0 || backgroundPositionY !== 0) {
-							svgLinearGradient.setAttribute(
-								'gradientTransform',
-								`translate(${backgroundPositionX}, ${backgroundPositionY})`
-							)
-						}
+						const svgLinearGradient = convertLinearGradient(linearGradientCss, context, {
+							width: tileWidth,
+							height: tileHeight,
+						})
 						svgLinearGradient.id = context.getUniqueId('linear-gradient')
-						const gradientLayer = createBox(bounds, context)
-						for (const attribute of ['rx', 'ry']) {
-							const value = box.getAttribute(attribute)
-							if (value !== null) {
-								gradientLayer.setAttribute(attribute, value)
+						backgroundAndBordersContainer.append(svgLinearGradient)
+
+						const tilesBox =
+							(repeatsX && tileWidth < bounds.width) || (repeatsY && tileHeight < bounds.height)
+						const coversBox =
+							!tilesBox &&
+							tileX === 0 &&
+							tileY === 0 &&
+							tileWidth === bounds.width &&
+							tileHeight === bounds.height
+						let gradientLayer: SVGRectElement
+						if (tilesBox) {
+							const pattern = context.svgDocument.createElementNS(svgNamespace, 'pattern')
+							pattern.setAttribute('patternUnits', 'userSpaceOnUse')
+							pattern.setAttribute('x', (bounds.x + tileX).toString())
+							pattern.setAttribute('y', (bounds.y + tileY).toString())
+							// On a non-repeating axis the tile spans the whole box so nothing is repeated inside it.
+							pattern.setAttribute('width', (repeatsX ? tileWidth : bounds.width).toString())
+							pattern.setAttribute('height', (repeatsY ? tileHeight : bounds.height).toString())
+							pattern.id = context.getUniqueId('pattern')
+							const tile = createBox(new DOMRect(0, 0, tileWidth, tileHeight), context)
+							tile.setAttribute('fill', `url(#${svgLinearGradient.id})`)
+							pattern.append(tile)
+							backgroundAndBordersContainer.append(pattern)
+							gradientLayer = createBox(bounds, context)
+							gradientLayer.setAttribute('fill', `url(#${pattern.id})`)
+						} else {
+							gradientLayer = createBox(
+								new DOMRect(bounds.x + tileX, bounds.y + tileY, tileWidth, tileHeight),
+								context
+							)
+							gradientLayer.setAttribute('fill', `url(#${svgLinearGradient.id})`)
+						}
+						if (tilesBox || coversBox) {
+							for (const attribute of ['rx', 'ry']) {
+								const value = box.getAttribute(attribute)
+								if (value !== null) {
+									gradientLayer.setAttribute(attribute, value)
+								}
 							}
 						}
-						gradientLayer.setAttribute('fill', `url(#${svgLinearGradient.id})`)
-						backgroundAndBordersContainer.append(svgLinearGradient, gradientLayer)
+						backgroundAndBordersContainer.append(gradientLayer)
 						hasGradientLayer = true
 					}
 				}
@@ -555,6 +609,14 @@ function addBackgroundAndBorders(
 			}
 		}
 	}
+}
+
+// Percentage positions align the same percentage point of the tile and the box, so they refer to the leftover space.
+function resolveBackgroundPosition(position: string, containerLength: number, tileLength: number): number {
+	if (position.endsWith('%')) {
+		return (parseFloat(position) / 100) * (containerLength - tileLength)
+	}
+	return parseCSSLength(position, containerLength) ?? 0
 }
 
 function createBox(bounds: DOMRectReadOnly, context: Pick<TraversalContext, 'svgDocument'>): SVGRectElement {

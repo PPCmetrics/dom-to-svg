@@ -23,7 +23,10 @@ const positionsForOrientation = (
 		y2: '0%',
 	}
 
-	if (orientation?.type === 'angular') {
+	if (!orientation) {
+		// CSS default direction is "to bottom"
+		positions.y2 = '100%'
+	} else if (orientation.type === 'angular') {
 		const anglePI = Number(orientation.value) * degreesPerUnit[orientation.unit] * (Math.PI / 180)
 		positions.x1 = `${Math.round(50 + Math.sin(anglePI + Math.PI) * 50)}%`
 		positions.y1 = `${Math.round(50 + Math.cos(anglePI) * 50)}%`
