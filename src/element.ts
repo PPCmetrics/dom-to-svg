@@ -440,6 +440,9 @@ function addBackgroundAndBorders(
 			(!isTransparent(styles.backgroundColor) || hasUniformBorder(styles) || styles.backgroundImage !== 'none')
 		) {
 			const box = createBackgroundAndBorderBox(bounds, styles, context, parentElement)
+			if (styles.borderCollapse === 'collapse' && !hasUniformBorder(styles)) {
+				insetFillFromSharedBorders(box, bounds, styles, window)
+			}
 			backgroundAndBordersContainer.append(box)
 			if (styles.backgroundImage !== 'none') {
 				const backgrounds = cssValueParser(styles.backgroundImage)
@@ -619,6 +622,39 @@ function resolveBackgroundPosition(position: string, containerLength: number, ti
 	return parseCSSLength(position, containerLength) ?? 0
 }
 
+// In collapsed tables a neighbor's later-painted fill would cover half of this cell's shared border stroke,
+// so keep the fill off half of every border (own, or the neighbor's when this cell has none on that side).
+function insetFillFromSharedBorders(
+	box: SVGRectElement,
+	bounds: DOMRectReadOnly,
+	styles: CSSStyleDeclaration,
+	window: Window
+): void {
+	const midX = bounds.left + bounds.width / 2
+	const midY = bounds.top + bounds.height / 2
+	const sides = {
+		top: { opposite: 'bottom', probeX: midX, probeY: bounds.top - 2 },
+		bottom: { opposite: 'top', probeX: midX, probeY: bounds.bottom + 2 },
+		left: { opposite: 'right', probeX: bounds.left - 2, probeY: midY },
+		right: { opposite: 'left', probeX: bounds.right + 2, probeY: midY },
+	} as const
+	const inset = { top: 0, bottom: 0, left: 0, right: 0 }
+	for (const [side, { opposite, probeX, probeY }] of Object.entries(sides) as [Side, typeof sides[Side]][]) {
+		let width = parseFloat(styles.getPropertyValue(`border-${side}-width`)) || 0
+		if (width === 0) {
+			const neighbor = window.document.elementFromPoint(probeX, probeY)?.closest('td, th')
+			if (neighbor) {
+				width = parseFloat(window.getComputedStyle(neighbor).getPropertyValue(`border-${opposite}-width`)) || 0
+			}
+		}
+		inset[side] = width / 2
+	}
+	box.setAttribute('x', (bounds.x + inset.left).toString())
+	box.setAttribute('y', (bounds.y + inset.top).toString())
+	box.setAttribute('width', (bounds.width - inset.left - inset.right).toString())
+	box.setAttribute('height', (bounds.height - inset.top - inset.bottom).toString())
+}
+
 function createBox(bounds: DOMRectReadOnly, context: Pick<TraversalContext, 'svgDocument'>): SVGRectElement {
 	const box = context.svgDocument.createElementNS(svgNamespace, 'rect')
 
@@ -696,6 +732,9 @@ function createBackgroundAndBorderBox(
 		// https://stackoverflow.com/questions/41696063/getcomputedstyle-returns-empty-strings-on-ff-when-instead-crome-returns-a-comp
 		background.setAttribute('stroke', styles.borderTopColor)
 		background.setAttribute('stroke-width', styles.borderTopWidth)
+		if (styles.borderCollapse === 'collapse') {
+			background.setAttribute('shape-rendering', 'crispEdges')
+		}
 		if (styles.borderTopStyle === 'dashed') {
 			// > Displays a series of short square-ended dashes or line segments.
 			// > The exact size and length of the segments are not defined by the specification and are implementation-specific.
@@ -747,7 +786,10 @@ function createBorder(
 ): SVGLineElement {
 	// TODO handle border-radius for non-uniform borders
 	const border = context.svgDocument.createElementNS(svgNamespace, 'line')
-	border.setAttribute('stroke-linecap', 'square')
+	if (styles.borderCollapse === 'collapse') {
+		// Shared edges are drawn by both cells; anti-aliasing would make them look thicker than single-drawn ones.
+		border.setAttribute('shape-rendering', 'crispEdges')
+	}
 	const color = styles.getPropertyValue(`border-${side}-color`)
 	border.setAttribute('stroke', color)
 	border.setAttribute('stroke-width', styles.getPropertyValue(`border-${side}-width`))
@@ -771,26 +813,24 @@ function createBorder(
 		border.setAttribute('stroke', `rgba(${components.join(', ')})`)
 	}
 
-	if (side === 'top') {
-		border.setAttribute('x1', bounds.left.toString())
-		border.setAttribute('x2', bounds.right.toString())
-		border.setAttribute('y1', bounds.top.toString())
-		border.setAttribute('y2', bounds.top.toString())
-	} else if (side === 'left') {
-		border.setAttribute('x1', bounds.left.toString())
-		border.setAttribute('x2', bounds.left.toString())
-		border.setAttribute('y1', bounds.top.toString())
-		border.setAttribute('y2', bounds.bottom.toString())
-	} else if (side === 'right') {
-		border.setAttribute('x1', bounds.right.toString())
-		border.setAttribute('x2', bounds.right.toString())
-		border.setAttribute('y1', bounds.top.toString())
-		border.setAttribute('y2', bounds.bottom.toString())
-	} else if (side === 'bottom') {
-		border.setAttribute('x1', bounds.left.toString())
-		border.setAttribute('x2', bounds.right.toString())
-		border.setAttribute('y1', bounds.bottom.toString())
-		border.setAttribute('y2', bounds.bottom.toString())
+	// Lines sit on the box edge (collapsed table cells share edges). Ends overhang by half the
+	// perpendicular border's width only where that border exists, to fill the corner without stubs.
+	const overhang = (perpendicular: Side): number =>
+		hasBorder(styles, perpendicular)
+			? (parseFloat(styles.getPropertyValue(`border-${perpendicular}-width`)) || 0) / 2
+			: 0
+	if (side === 'top' || side === 'bottom') {
+		const lineY = (side === 'top' ? bounds.top : bounds.bottom).toString()
+		border.setAttribute('x1', (bounds.left - overhang('left')).toString())
+		border.setAttribute('x2', (bounds.right + overhang('right')).toString())
+		border.setAttribute('y1', lineY)
+		border.setAttribute('y2', lineY)
+	} else {
+		const lineX = (side === 'left' ? bounds.left : bounds.right).toString()
+		border.setAttribute('x1', lineX)
+		border.setAttribute('x2', lineX)
+		border.setAttribute('y1', (bounds.top - overhang('top')).toString())
+		border.setAttribute('y2', (bounds.bottom + overhang('bottom')).toString())
 	}
 	return border
 }
